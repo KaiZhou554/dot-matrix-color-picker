@@ -18,7 +18,7 @@
 
 ## 使用
 
-`OklchDotPicker.vue` 包含了无障碍和本地化功能，`OklchDotPickerLite.vue`则没有这些功能。
+`OklchDotPicker.vue` 包含了无障碍和本地化功能，`OklchDotPickerLite.vue` 则没有这些功能。
 
 ```vue
 <script setup>
@@ -38,6 +38,7 @@ const color = ref('oklch(0.65 0.22 180 / 0.55)')
 | Prop       | 类型   | 默认值      | 说明           |
 | ---------- | ------ | ----------- | -------------- |
 | modelValue | String | `'#3b82f6'` | 当前选中颜色值 |
+| locale | String | `zh` | 无障碍功能使用的语言 |
 
 ### Events
 
