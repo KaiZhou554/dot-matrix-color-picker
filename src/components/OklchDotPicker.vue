@@ -3,7 +3,7 @@
     <!-- 触发器 -->
     <button
       ref="triggerRef"
-      class="w-10 h-10 rounded-lg border-3 border-gray-200 cursor-pointer
+      class="w-10 h-10 rounded-lg border-3 border-gray-200 dark:border-gray-600 cursor-pointer
              transition-colors duration-150 outline-none
              focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
       :style="{ backgroundColor: modelValue }"
@@ -13,42 +13,54 @@
 
     <!-- 弹出面板 -->
     <Teleport to="body">
-      <div
-        v-if="open"
-        class="popup-overlay fixed inset-0 z-40"
-        @click="close"
-      />
-      <div
-        v-if="open"
-        ref="popupRef"
-        class="popup-panel fixed z-50 w-fit rounded-2xl px-6 py-5
-               border-3 border-gray-200 font-sans
-               transition-colors duration-150
-               bg-white dark:bg-gray-800"
-        :style="popupStyle"
-      >
-        <!-- 点阵区域 -->
+      <!-- 遮罩 -->
+      <Transition name="fade">
         <div
-          ref="gridRef"
-          class="color-grid grid gap-2.5 touch-none"
-          :style="{ gridTemplateColumns: `repeat(${col}, 1fr)` }"
-          @mousemove="handleMove"
-          @mouseup="selectColor"
-          @mouseleave="handleLeave"
-          @mousedown.stop
-          @touchstart.prevent="handleTouch"
-          @touchmove.prevent="handleTouch"
-          @touchend="handleLeave"
-          @touchcancel="handleLeave"
+          v-if="open"
+          class="fixed inset-0 z-40 bg-black/5"
+          @click="close"
+        />
+      </Transition>
+
+      <!-- 面板 -->
+      <Transition
+        name="popup"
+        @before-enter="beforeEnter"
+        @enter="enter"
+        @leave="leave"
+      >
+        <div
+          v-if="open"
+          ref="popupRef"
+          class="popup-panel fixed z-50 w-fit rounded-2xl px-6 py-5
+                 border-3 border-gray-200 dark:border-gray-600 font-sans
+                 transition-colors duration-150
+                 bg-white dark:bg-gray-800"
+          :style="popupStyle"
         >
+          <!-- 点阵区域 -->
           <div
-            v-for="(item, index) in dotList"
-            :key="index"
-            class="color-dot w-1 h-1 rounded-full"
-            :style="{ backgroundColor: item.color }"
-          />
+            ref="gridRef"
+            class="color-grid grid gap-2.5 touch-none"
+            :style="{ gridTemplateColumns: `repeat(${col}, 1fr)` }"
+            @mousemove="handleMove"
+            @mouseup="selectColor"
+            @mouseleave="handleLeave"
+            @mousedown.stop
+            @touchstart.prevent="handleTouch"
+            @touchmove.prevent="handleTouch"
+            @touchend="handleLeave"
+            @touchcancel="handleLeave"
+          >
+            <div
+              v-for="(item, index) in dotList"
+              :key="index"
+              class="color-dot w-1 h-1 rounded-full"
+              :style="{ backgroundColor: item.color }"
+            />
+          </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -77,6 +89,11 @@ const row = 10
 const baseScale = 1
 const maxScale = 3.5
 const effectiveRadius = 60
+
+// 网格布局参数（与 CSS 保持一致：w-1=4px, gap-2.5=10px）
+const DOT_SIZE = 4
+const DOT_GAP = 10
+const DOT_STEP = DOT_SIZE + DOT_GAP // 14px
 
 // 缓存
 const dotCache = []
@@ -110,24 +127,23 @@ onMounted(async () => {
   dotList.value = list
 })
 
-// 打开时测量点位置
+// 打开时缓存点引用和计算坐标（纯数学计算，不受 CSS transform 影响）
 watch(open, async (val) => {
   if (!val) return
   await nextTick()
   if (!gridRef.value) return
 
   dotCache.length = 0
-  const gridRect = gridRef.value.getBoundingClientRect()
   const dots = gridRef.value.children
 
   for (let i = 0; i < dots.length; i++) {
-    const dot = dots[i]
-    const rect = dot.getBoundingClientRect()
+    const colIdx = i % col
+    const rowIdx = Math.floor(i / col)
     dotCache.push({
-      el: dot,
+      el: dots[i],
       color: dotList.value[i]?.color ?? '#e5e7eb',
-      x: rect.left - gridRect.left + rect.width / 2,
-      y: rect.top - gridRect.top + rect.height / 2,
+      x: colIdx * DOT_STEP + DOT_SIZE / 2,
+      y: rowIdx * DOT_STEP + DOT_SIZE / 2,
     })
   }
 
@@ -170,6 +186,27 @@ function toggle() {
 
 function close() {
   open.value = false
+}
+
+// --- 过渡动画钩子 ---
+function beforeEnter(el) {
+  el.style.opacity = '0'
+  el.style.transform = 'scale(0.7)'
+}
+
+function enter(el, done) {
+  el.offsetHeight // 强制回流
+  el.style.transition = 'opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)'
+  el.style.opacity = '1'
+  el.style.transform = 'scale(1)'
+  el.addEventListener('transitionend', done, { once: true })
+}
+
+function leave(el, done) {
+  el.style.transition = 'opacity 0.15s ease-in, transform 0.15s ease-in'
+  el.style.opacity = '0'
+  el.style.transform = 'scale(0.7)'
+  el.addEventListener('transitionend', done, { once: true })
 }
 
 // 缩放渲染
@@ -230,14 +267,14 @@ function handleLeave() {
     dot.el.style.transform = `scale(${baseScale})`
   }
   currentHoverColor = '#e5e7eb'
+  // 清除 inline borderColor，让 CSS class 接管深浅色默认边框
   if (popupRef.value) {
-    popupRef.value.style.borderColor = '#e5e7eb'
+    popupRef.value.style.borderColor = ''
   }
 }
 
-// 点击点阵选中颜色
+// 点击选中
 function selectColor(e) {
-  // 在 mouseup 时选中最近的颜色
   if (currentHoverColor && currentHoverColor !== '#e5e7eb') {
     emit('update:modelValue', currentHoverColor)
     close()
@@ -267,8 +304,17 @@ onBeforeUnmount(() => {
   transition: transform 0.06s linear;
 }
 
-/* 自定义阴影 — Tailwind shadow-lg 不完全匹配 0 4px 20px rgba(0,0,0,0.08) */
 .popup-panel {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* 遮罩淡入淡出 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
