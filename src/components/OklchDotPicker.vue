@@ -32,9 +32,9 @@
         <div
           v-if="open"
           ref="popupRef"
-          class="popup-panel fixed z-50 w-fit rounded-2xl px-6 py-5
+          class="popup-panel fixed z-50 w-fit rounded-2xl
                  border-3 border-gray-200 dark:border-gray-600 font-sans
-                 transition-colors duration-150
+                 transition-colors duration-1200
                  bg-white dark:bg-gray-800"
           :style="popupStyle"
         >
@@ -83,9 +83,13 @@ const popupRef = ref(null)
 const dotList = ref([])
 const triggerRef = ref(null)
 
-// 配置
-const col = 16
-const row = 10
+// 配置 — 内层有效颜色区域 + 外围一圈透明缓冲点
+const INNER_COL = 16
+const INNER_ROW = 10
+const PAD = 1 // 外围一圈
+const col = INNER_COL + PAD * 2  // 18
+const row = INNER_ROW + PAD * 2  // 12
+
 const baseScale = 1
 const maxScale = 3.5
 const effectiveRadius = 60
@@ -102,20 +106,34 @@ const dotCache = []
 let rafId = null
 let pointerX = 0
 let pointerY = 0
-let currentHoverColor = '#e5e7eb'
+let currentHoverColor = ''
 
 // 弹出位置
 const popupStyle = ref({})
+
+// 判断是否为外围透明点
+function isBorder(colIdx, rowIdx) {
+  return colIdx < PAD || colIdx >= col - PAD || rowIdx < PAD || rowIdx >= row - PAD
+}
 
 // 生成颜色
 function generateColor(index) {
   const x = index % col
   const y = Math.floor(index / col)
-  const hue = (x / col) * 360
+
+  // 外围点：透明
+  if (isBorder(x, y)) {
+    return { color: 'transparent', isTransparent: true }
+  }
+
+  // 内层：从有效区域映射 hue / alpha
+  const ix = x - PAD
+  const iy = y - PAD
+  const hue = (ix / INNER_COL) * 360
   const light = 0.65
   const chroma = 0.22
-  const alpha = (0.9 / row) * y + 0.1
-  return { color: `oklch(${light} ${chroma} ${hue} / ${alpha})` }
+  const alpha = (0.9 / INNER_ROW) * iy + 0.1
+  return { color: `oklch(${light} ${chroma} ${hue} / ${alpha})`, isTransparent: false }
 }
 
 // 初始化点阵数据
@@ -139,9 +157,11 @@ watch(open, async (val) => {
   for (let i = 0; i < dots.length; i++) {
     const colIdx = i % col
     const rowIdx = Math.floor(i / col)
+    const info = dotList.value[i]
     dotCache.push({
       el: dots[i],
-      color: dotList.value[i]?.color ?? '#e5e7eb',
+      color: info?.color ?? '#e5e7eb',
+      isTransparent: info?.isTransparent ?? false,
       x: colIdx * DOT_STEP + DOT_SIZE / 2,
       y: rowIdx * DOT_STEP + DOT_SIZE / 2,
     })
@@ -220,15 +240,17 @@ function render() {
   const my = pointerY - rect.top
 
   let minDist = Infinity
+  let nearestSolidColor = null
 
   for (const dot of dotCache) {
     const dx = mx - dot.x
     const dy = my - dot.y
     const dist = Math.hypot(dx, dy)
 
-    if (dist < minDist) {
+    // 最近实色点（排除透明点）
+    if (!dot.isTransparent && dist < minDist) {
       minDist = dist
-      currentHoverColor = dot.color
+      nearestSolidColor = dot.color
     }
 
     const scale =
@@ -239,9 +261,10 @@ function render() {
     dot.el.style.transform = `scale(${scale})`
   }
 
-  // 更新面板边框颜色
+  // 面板边框色：有实色点则用其颜色，否则用 CSS 默认值
   if (popupRef.value) {
-    popupRef.value.style.borderColor = currentHoverColor
+    currentHoverColor = nearestSolidColor ?? ''
+    popupRef.value.style.borderColor = nearestSolidColor ?? ''
   }
 }
 
@@ -266,16 +289,15 @@ function handleLeave() {
   for (const dot of dotCache) {
     dot.el.style.transform = `scale(${baseScale})`
   }
-  currentHoverColor = '#e5e7eb'
-  // 清除 inline borderColor，让 CSS class 接管深浅色默认边框
+  currentHoverColor = ''
   if (popupRef.value) {
     popupRef.value.style.borderColor = ''
   }
 }
 
-// 点击选中
+// 点击选中（忽略透明点和未悬停实色点的情况）
 function selectColor(e) {
-  if (currentHoverColor && currentHoverColor !== '#e5e7eb') {
+  if (currentHoverColor) {
     emit('update:modelValue', currentHoverColor)
     close()
   }
