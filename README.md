@@ -18,6 +18,8 @@
 
 ## 使用
 
+`OklchDotPicker.vue` 包含了无障碍和本地化功能，`OklchDotPickerLite.vue`则没有这些功能。
+
 ```vue
 <script setup>
 import { ref } from 'vue'

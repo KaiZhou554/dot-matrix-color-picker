@@ -15,7 +15,7 @@
 
         <!-- 选择器 -->
         <div class="flex justify-center">
-          <OklchDotPicker v-model="color" />
+          <OklchDotPickerLite v-model="color" />
         </div>
 
         <!-- 当前颜色信息 -->
@@ -69,7 +69,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import OklchDotPicker from './OklchDotPicker.vue'
+import OklchDotPickerLite from './OklchDotPickerLite.vue'
 
 const color = ref('oklch(0.65 0.22 180 / 0.55)')
 
