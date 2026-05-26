@@ -1,10 +1,7 @@
 <script setup>
-
-import OklchDotPicker from './components/OklchDotPicker.vue';
+import DemoPage from './components/DemoPage.vue'
 </script>
 
 <template>
-<OklchDotPicker />
+  <DemoPage />
 </template>
-
-
