@@ -176,7 +176,16 @@ function render() {
   const grid = gridRef.value
   if (!grid) return
 
-  const { left, top } = grid.getBoundingClientRect()
+  const { left, top, right, bottom } = grid.getBoundingClientRect()
+
+  // 指针划出网格：立刻重置，模拟 mouseleave 的即时反馈
+  if (pointerX < left || pointerX > right || pointerY < top || pointerY > bottom) {
+    for (const dot of dotCache) dot.el.style.transform = `scale(${GRID.baseScale})`
+    currentHoverColor = ''
+    if (popupRef.value) popupRef.value.style.borderColor = ''
+    return
+  }
+
   const mx = pointerX - left
   const my = pointerY - top
 
