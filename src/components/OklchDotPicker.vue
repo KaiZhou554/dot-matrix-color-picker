@@ -126,18 +126,25 @@ let pointerY = 0
 let currentHoverColor = ''
 const popupStyle = ref({})
 
-// 打开时注入 DOM 引用 + 定位
+// 打开时注入 DOM 引用 + 定位，并持续跟踪触发器位置
 watch(open, async (val) => {
-  if (!val) return
-  await nextTick()
-  if (!gridRef.value) return
+  if (val) {
+    await nextTick()
+    if (!gridRef.value) return
 
-  dotCache.length = 0
-  const dots = gridRef.value.children
-  for (let i = 0; i < dots.length; i++) {
-    dotCache.push({ ...dotsData[i], el: dots[i] })
+    dotCache.length = 0
+    const dots = gridRef.value.children
+    for (let i = 0; i < dots.length; i++) {
+      dotCache.push({ ...dotsData[i], el: dots[i] })
+    }
+    updatePopupPosition()
+
+    window.addEventListener('resize', updatePopupPosition)
+    window.addEventListener('scroll', updatePopupPosition, true)
+  } else {
+    window.removeEventListener('resize', updatePopupPosition)
+    window.removeEventListener('scroll', updatePopupPosition, true)
   }
-  updatePopupPosition()
 })
 
 function updatePopupPosition() {
@@ -239,7 +246,11 @@ function selectColor() {
 function onKeydown(e) { if (e.key === 'Escape') close() }
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', updatePopupPosition)
+  window.removeEventListener('scroll', updatePopupPosition, true)
+})
 </script>
 
 <style scoped>
