@@ -1,37 +1,61 @@
 # dot-matrix-color-picker
 
-This template should help get you started developing with Vue 3 in Vite.
+基于 OKLCH 色彩空间的点阵式颜色选择器，Vue 3 组件。
 
-## Recommended IDE Setup
+## 特性
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- **OKLCH 色彩空间** — 感知均匀的色相 / 饱和度 / 亮度分布，选色更直观
+- **点阵交互** — 悬停放大最近点并实时预览边框颜色，点击选中
+- **触摸支持** — 同时适配鼠标与触屏拖拽操作
+- **深色模式** — 自动跟随系统偏好，亮 / 暗主题无缝切换
+- **自适应定位** — 面板自动避开视口边缘，窗口大小变化时跟随触发器
 
-## Recommended Browser Setup
+## 技术栈
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+- Vue 3（Composition API）
+- Vite
+- CSS 过渡动画
 
-## Customize configuration
+## 使用
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+```vue
+<script setup>
+import { ref } from 'vue'
+import OklchDotPicker from './components/OklchDotPicker.vue'
 
-## Project Setup
+const color = ref('oklch(0.65 0.22 180 / 0.55)')
+</script>
+
+<template>
+  <OklchDotPicker v-model="color" />
+</template>
+```
+
+### Props
+
+| Prop       | 类型   | 默认值      | 说明           |
+| ---------- | ------ | ----------- | -------------- |
+| modelValue | String | `'#3b82f6'` | 当前选中颜色值 |
+
+### Events
+
+| Event              | 参数   | 说明               |
+| ------------------ | ------ | ------------------ |
+| update:modelValue  | String | 用户点击选中新颜色 |
+
+## 项目设置
 
 ```sh
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 开发
 
 ```sh
 npm run dev
 ```
 
-### Compile and Minify for Production
+### 构建
 
 ```sh
 npm run build
