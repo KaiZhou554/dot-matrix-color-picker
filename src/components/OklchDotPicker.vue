@@ -13,7 +13,6 @@
 
     <!-- 弹出面板 -->
     <Teleport to="body">
-      <!-- 遮罩 -->
       <Transition name="fade">
         <div
           v-if="open"
@@ -22,41 +21,34 @@
         />
       </Transition>
 
-      <!-- 面板 -->
-      <Transition
-        name="popup"
-        @before-enter="beforeEnter"
-        @enter="enter"
-        @leave="leave"
-      >
+      <Transition name="popup">
         <div
           v-if="open"
           ref="popupRef"
-          class="popup-panel fixed z-50 w-fit rounded-2xl
+          class="shadow-lg fixed z-50 w-fit rounded-2xl
                  border-3 border-gray-200 dark:border-gray-600 font-sans
-                 transition-colors duration-1200
+                 transition-colors duration-150
                  bg-white dark:bg-gray-800"
           :style="popupStyle"
         >
-          <!-- 点阵区域 -->
           <div
             ref="gridRef"
             class="color-grid grid gap-2.5 touch-none"
-            :style="{ gridTemplateColumns: `repeat(${col}, 1fr)` }"
-            @mousemove="handleMove"
+            :style="{ gridTemplateColumns: `repeat(${GRID.col}, 1fr)` }"
+            @mousemove="onPointer($event.clientX, $event.clientY)"
             @mouseup="selectColor"
             @mouseleave="handleLeave"
             @mousedown.stop
-            @touchstart.prevent="handleTouch"
-            @touchmove.prevent="handleTouch"
-            @touchend="handleLeave"
+            @touchstart.prevent="onPointer($event.touches[0].clientX, $event.touches[0].clientY)"
+            @touchmove.prevent="onPointer($event.touches[0].clientX, $event.touches[0].clientY)"
+            @touchend="onTouchEnd"
             @touchcancel="handleLeave"
           >
             <div
-              v-for="(item, index) in dotList"
+              v-for="(dot, index) in dotsData"
               :key="index"
               class="color-dot w-1 h-1 rounded-full"
-              :style="{ backgroundColor: item.color }"
+              :style="{ backgroundColor: dot.color }"
             />
           </div>
         </div>
@@ -69,10 +61,7 @@
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 
 const props = defineProps({
-  modelValue: {
-    type: String,
-    default: '#3b82f6',
-  },
+  modelValue: { type: String, default: '#3b82f6' },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -80,26 +69,54 @@ const emit = defineEmits(['update:modelValue'])
 const open = ref(false)
 const gridRef = ref(null)
 const popupRef = ref(null)
-const dotList = ref([])
 const triggerRef = ref(null)
 
-// 配置 — 内层有效颜色区域 + 外围一圈透明缓冲点
-const INNER_COL = 16
-const INNER_ROW = 10
-const PAD = 1 // 外围一圈
-const col = INNER_COL + PAD * 2  // 18
-const row = INNER_ROW + PAD * 2  // 12
+// ── 网格配置 ──
+const GRID = {
+  innerCol: 16,
+  innerRow: 10,
+  pad: 1,
+  get col() { return this.innerCol + this.pad * 2 },
+  get row() { return this.innerRow + this.pad * 2 },
+  dotSize: 4,
+  dotGap: 10,
+  get step() { return this.dotSize + this.dotGap },
+  baseScale: 1,
+  maxScale: 3.5,
+  radius: 60,
+}
 
-const baseScale = 1
-const maxScale = 3.5
-const effectiveRadius = 60
+// ── 静态点数据（颜色 + 坐标，一次计算永不变化）──
+const dotsData = []
 
-// 网格布局参数（与 CSS 保持一致：w-1=4px, gap-2.5=10px）
-const DOT_SIZE = 4
-const DOT_GAP = 10
-const DOT_STEP = DOT_SIZE + DOT_GAP // 14px
+{ // 构建静态数据
+  const { innerCol, innerRow, pad, col, row, step, dotSize } = GRID
+  for (let i = 0; i < col * row; i++) {
+    const cx = i % col
+    const cy = Math.floor(i / col)
+    const border = cx < pad || cx >= col - pad || cy < pad || cy >= row - pad
 
-// 缓存
+    let color
+    if (border) {
+      color = 'transparent'
+    } else {
+      const ix = cx - pad
+      const iy = cy - pad
+      const hue = (ix / innerCol) * 360
+      const alpha = (0.9 / innerRow) * iy + 0.1
+      color = `oklch(0.65 0.22 ${hue} / ${alpha})`
+    }
+
+    dotsData.push({
+      color,
+      isTransparent: border,
+      x: cx * step + dotSize / 2,
+      y: cy * step + dotSize / 2,
+    })
+  }
+}
+
+// ── 运行时缓存（每次打开注入 DOM 引用）──
 const dotCache = []
 
 // RAF
@@ -107,45 +124,9 @@ let rafId = null
 let pointerX = 0
 let pointerY = 0
 let currentHoverColor = ''
-
-// 弹出位置
 const popupStyle = ref({})
 
-// 判断是否为外围透明点
-function isBorder(colIdx, rowIdx) {
-  return colIdx < PAD || colIdx >= col - PAD || rowIdx < PAD || rowIdx >= row - PAD
-}
-
-// 生成颜色
-function generateColor(index) {
-  const x = index % col
-  const y = Math.floor(index / col)
-
-  // 外围点：透明
-  if (isBorder(x, y)) {
-    return { color: 'transparent', isTransparent: true }
-  }
-
-  // 内层：从有效区域映射 hue / alpha
-  const ix = x - PAD
-  const iy = y - PAD
-  const hue = (ix / INNER_COL) * 360
-  const light = 0.65
-  const chroma = 0.22
-  const alpha = (0.9 / INNER_ROW) * iy + 0.1
-  return { color: `oklch(${light} ${chroma} ${hue} / ${alpha})`, isTransparent: false }
-}
-
-// 初始化点阵数据
-onMounted(async () => {
-  const list = []
-  for (let i = 0; i < col * row; i++) {
-    list.push(generateColor(i))
-  }
-  dotList.value = list
-})
-
-// 打开时缓存点引用和计算坐标（纯数学计算，不受 CSS transform 影响）
+// 打开时注入 DOM 引用 + 定位
 watch(open, async (val) => {
   if (!val) return
   await nextTick()
@@ -153,184 +134,126 @@ watch(open, async (val) => {
 
   dotCache.length = 0
   const dots = gridRef.value.children
-
   for (let i = 0; i < dots.length; i++) {
-    const colIdx = i % col
-    const rowIdx = Math.floor(i / col)
-    const info = dotList.value[i]
-    dotCache.push({
-      el: dots[i],
-      color: info?.color ?? '#e5e7eb',
-      isTransparent: info?.isTransparent ?? false,
-      x: colIdx * DOT_STEP + DOT_SIZE / 2,
-      y: rowIdx * DOT_STEP + DOT_SIZE / 2,
-    })
+    dotCache.push({ ...dotsData[i], el: dots[i] })
   }
-
-  // 计算弹出位置
   updatePopupPosition()
 })
 
-// 更新弹出位置
 function updatePopupPosition() {
   const trigger = triggerRef.value
   if (!trigger) return
-  const rect = trigger.getBoundingClientRect()
+  const { bottom, left, top: triggerTop } = trigger.getBoundingClientRect()
   const gap = 8
 
-  // 默认在触发器下方
-  let top = rect.bottom + gap
-  let left = rect.left
+  let top = bottom + gap
+  let panelLeft = left
 
-  // 如果下方空间不够，放到上方
-  const panelH = 300 // 预估高度
-  if (top + panelH > window.innerHeight - 16) {
-    top = rect.top - gap - panelH
+  if (top + 300 > window.innerHeight - 16) {
+    top = triggerTop - gap - 300
     if (top < 16) top = 16
   }
-
-  // 如果右侧空间不够，向左调整
-  const panelW = 320 // 预估宽度
-  if (left + panelW > window.innerWidth - 16) {
-    left = window.innerWidth - panelW - 16
+  if (panelLeft + 320 > window.innerWidth - 16) {
+    panelLeft = window.innerWidth - 320 - 16
   }
-  if (left < 16) left = 16
+  if (panelLeft < 16) panelLeft = 16
 
-  popupStyle.value = { top: `${top}px`, left: `${left}px` }
+  popupStyle.value = { top: `${top}px`, left: `${panelLeft}px` }
 }
 
-// 切换
-function toggle() {
-  open.value = !open.value
+function toggle() { open.value = !open.value }
+function close() { open.value = false }
+
+// ── 点阵交互 ──
+function onPointer(x, y) {
+  pointerX = x
+  pointerY = y
+  if (!rafId) rafId = requestAnimationFrame(render)
 }
 
-function close() {
-  open.value = false
-}
-
-// --- 过渡动画钩子 ---
-function beforeEnter(el) {
-  el.style.opacity = '0'
-  el.style.transform = 'scale(0.7)'
-}
-
-function enter(el, done) {
-  el.offsetHeight // 强制回流
-  el.style.transition = 'opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)'
-  el.style.opacity = '1'
-  el.style.transform = 'scale(1)'
-  el.addEventListener('transitionend', done, { once: true })
-}
-
-function leave(el, done) {
-  el.style.transition = 'opacity 0.15s ease-in, transform 0.15s ease-in'
-  el.style.opacity = '0'
-  el.style.transform = 'scale(0.7)'
-  el.addEventListener('transitionend', done, { once: true })
-}
-
-// 缩放渲染
 function render() {
   rafId = null
   const grid = gridRef.value
   if (!grid) return
 
-  const rect = grid.getBoundingClientRect()
-  const mx = pointerX - rect.left
-  const my = pointerY - rect.top
+  const { left, top } = grid.getBoundingClientRect()
+  const mx = pointerX - left
+  const my = pointerY - top
 
   let minDist = Infinity
-  let nearestSolidColor = null
+  let nearest = null
 
   for (const dot of dotCache) {
-    const dx = mx - dot.x
-    const dy = my - dot.y
-    const dist = Math.hypot(dx, dy)
+    const dist = Math.hypot(mx - dot.x, my - dot.y)
 
-    // 最近实色点（排除透明点）
     if (!dot.isTransparent && dist < minDist) {
       minDist = dist
-      nearestSolidColor = dot.color
+      nearest = dot.color
     }
 
-    const scale =
-      dist >= effectiveRadius
-        ? baseScale
-        : baseScale + (maxScale - baseScale) * (1 - dist / effectiveRadius)
-
-    dot.el.style.transform = `scale(${scale})`
+    dot.el.style.transform =
+      dist >= GRID.radius
+        ? `scale(${GRID.baseScale})`
+        : `scale(${GRID.baseScale + (GRID.maxScale - GRID.baseScale) * (1 - dist / GRID.radius)})`
   }
 
-  // 面板边框色：有实色点则用其颜色，否则用 CSS 默认值
+  currentHoverColor = nearest ?? ''
   if (popupRef.value) {
-    currentHoverColor = nearestSolidColor ?? ''
-    popupRef.value.style.borderColor = nearestSolidColor ?? ''
+    popupRef.value.style.borderColor = nearest ?? ''
   }
 }
 
-function handleMove(e) {
-  pointerX = e.clientX
-  pointerY = e.clientY
-  if (!rafId) rafId = requestAnimationFrame(render)
-}
-
-function handleTouch(e) {
-  const t = e.touches[0]
-  pointerX = t.clientX
-  pointerY = t.clientY
-  if (!rafId) rafId = requestAnimationFrame(render)
+function onTouchEnd(e) {
+  const grid = gridRef.value
+  if (grid) {
+    const touch = e.changedTouches[0]
+    const rect = grid.getBoundingClientRect()
+    if (touch.clientX >= rect.left && touch.clientX <= rect.right &&
+        touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+      selectColor()
+    }
+  }
+  handleLeave()
 }
 
 function handleLeave() {
-  if (rafId) {
-    cancelAnimationFrame(rafId)
-    rafId = null
-  }
-  for (const dot of dotCache) {
-    dot.el.style.transform = `scale(${baseScale})`
-  }
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+  for (const dot of dotCache) dot.el.style.transform = `scale(${GRID.baseScale})`
   currentHoverColor = ''
-  if (popupRef.value) {
-    popupRef.value.style.borderColor = ''
-  }
+  if (popupRef.value) popupRef.value.style.borderColor = ''
 }
 
-// 点击选中（忽略透明点和未悬停实色点的情况）
-function selectColor(e) {
-  if (currentHoverColor) {
-    emit('update:modelValue', currentHoverColor)
-    close()
-  }
+function selectColor() {
+  if (currentHoverColor) { emit('update:modelValue', currentHoverColor); close() }
 }
 
-// 键盘关闭
-function onKeydown(e) {
-  if (e.key === 'Escape') close()
-}
+function onKeydown(e) { if (e.key === 'Escape') close() }
 
-onMounted(() => {
-  document.addEventListener('keydown', onKeydown)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeydown)
-})
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>
-/* 难以用 Tailwind 精确表达的样式保留在此 */
-
 .color-dot {
   will-change: transform;
   transform: translateZ(0);
   transition: transform 0.06s linear;
 }
 
-.popup-panel {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+/* ── 动画（纯 CSS，替代 JS 钩子）── */
+.popup-enter-active {
+  transition: opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.popup-leave-active {
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+.popup-enter-from,
+.popup-leave-to {
+  opacity: 0;
+  transform: scale(0.7);
 }
 
-/* 遮罩淡入淡出 */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
