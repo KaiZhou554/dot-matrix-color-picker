@@ -1,64 +1,69 @@
 # dot-matrix-color-picker
 
-基于 OKLCH 色彩空间的点阵式颜色选择器，Vue 3 组件。
+English | [简体中文](README_zh.md)
 
-## 特性
+A dot-matrix color picker based on the OKLCH color space, built as a Vue 3 component.
 
-- **OKLCH 色彩空间** — 感知均匀的色相 / 饱和度 / 亮度分布，选色更直观
-- **点阵交互** — 悬停放大最近点并实时预览边框颜色，点击选中
-- **触摸支持** — 同时适配鼠标与触屏拖拽操作
-- **深色模式** — 自动跟随系统偏好，亮 / 暗主题无缝切换
-- **自适应定位** — 面板自动避开视口边缘，窗口大小变化时跟随触发器
+## Features
 
-## 技术栈
+- **OKLCH color space** — Perceptually uniform hue / saturation / lightness distribution for intuitive color selection
+- **Dot-matrix interaction** — Hover to enlarge the nearest dot with real-time preview, click to select
+- **Touch support** — Works with both mouse and touch drag operations
+- **Dark mode** — Automatically follows system preference, seamless light / dark theme switching
+- **Adaptive positioning** — Panel auto-avoids viewport edges and follows the trigger on window resize
+- **Accessible keyboard mode** — Tab and arrow-key navigation, screen-reader friendly with i18n (中文 / English)
 
-- Vue 3（Composition API）
+## Tech Stack
+
+- Vue 3 (Composition API)
 - Vite
-- CSS 过渡动画
+- CSS transitions & animations
 
-## 使用
+## Usage
 
-`OklchDotPicker.vue` 包含了无障碍和本地化功能，`OklchDotPickerLite.vue` 则没有这些功能。
+`OklchDotPickerAccessible.vue` includes full accessibility and localization.  
+`OklchDotPickerLite.vue` is a lightweight version without a11y features.
 
 ```vue
 <script setup>
 import { ref } from 'vue'
-import OklchDotPicker from './components/OklchDotPicker.vue'
+import OklchDotPickerAccessible from './components/OklchDotPickerAccessible.vue'
 
 const color = ref('oklch(0.65 0.22 180 / 0.55)')
 </script>
 
 <template>
-  <OklchDotPicker v-model="color" />
+  <OklchDotPickerAccessible v-model="color" />
 </template>
 ```
 
 ### Props
 
-| Prop       | 类型   | 默认值      | 说明           |
-| ---------- | ------ | ----------- | -------------- |
-| modelValue | String | `'#3b82f6'` | 当前选中颜色值 |
-| locale | String | `zh` | 无障碍功能使用的语言 |
+| Prop         | Type   | Default      | Description                              |
+| ------------ | ------ | ------------ | ---------------------------------------- |
+| modelValue   | String | `'#3b82f6'`  | Currently selected color value           |
+| locale       | String | `'zh-CN'`    | Language for a11y labels                 |
+| confirmColor | String | `'#3b82f6'`  | Background color of the confirm button   |
 
 ### Events
 
-| Event              | 参数   | 说明               |
-| ------------------ | ------ | ------------------ |
-| update:modelValue  | String | 用户点击选中新颜色 |
+| Event             | Params  | Description                     |
+| ----------------- | ------- | ------------------------------- |
+| update:modelValue | String  | Emitted when user selects color |
 
-## 项目设置
+## Setup
 
 ```sh
 npm install
 ```
 
-### 开发
+### Development
 
 ```sh
 npm run dev
 ```
 
-### 构建
+### Build
 
 ```sh
 npm run build
