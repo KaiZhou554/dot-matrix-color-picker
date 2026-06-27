@@ -72,9 +72,10 @@
           <!-- ── Keyboard 模式：色相 + 透明度 + 完成按钮 ── -->
           <div
             v-else
-            class="flex flex-col gap-3 p-3.5 min-w-[260px]"
+            class="flex flex-col gap-3 p-3.5 min-w-[260px] outline-none"
             role="group"
             :aria-label="t('colorAdjust')"
+            @keydown="onKbKeydown"
           >
             <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('hue') }}</span>
             <div class="flex" role="radiogroup" :aria-label="t('hue')">
@@ -82,7 +83,7 @@
                 v-for="(opt, i) in hueOptions"
                 :key="opt.hue"
                 role="radio"
-                :tabindex="keyHue === opt.hue ? 0 : -1"
+                :tabindex="kbFocusIndex === i ? 0 : -1"
                 :aria-checked="keyHue === opt.hue"
                 :aria-label="opt.label"
                 class="flex-1 h-9 cursor-pointer outline-none
@@ -96,7 +97,7 @@
                 ]"
                 :style="{ backgroundColor: opt.color }"
                 @click="pickHue(opt.hue)"
-                @keydown="onRadioKeydown($event, 'hue', i)"
+                @focus="kbFocusIndex = i"
               >
                 <span
                   v-if="keyHue === opt.hue"
@@ -114,7 +115,7 @@
                 v-for="(a, i) in alphaOptions"
                 :key="a"
                 role="radio"
-                :tabindex="Math.abs(keyAlpha - a) < 0.02 ? 0 : -1"
+                :tabindex="kbFocusIndex === i + 8 ? 0 : -1"
                 :aria-checked="Math.abs(keyAlpha - a) < 0.02"
                 :aria-label="t('alphaValue', { pct: Math.round(a * 100), desc: alphaDesc(a) })"
                 class="flex-1 h-9 cursor-pointer outline-none overflow-hidden
@@ -128,7 +129,7 @@
                 ]"
                 :style="{ background: alphaBg(a), backgroundSize: '100% 100%, 8px 8px' }"
                 @click="pickAlpha(a)"
-                @keydown="onRadioKeydown($event, 'alpha', i)"
+                @focus="kbFocusIndex = i + 8"
               >
                 <span
                   v-if="Math.abs(keyAlpha - a) < 0.02"
@@ -142,11 +143,13 @@
 
             <!-- 完成按钮 -->
             <button
+              :tabindex="kbFocusIndex === 12 ? 0 : -1"
               class="w-full h-8 rounded-lg text-white text-xs font-medium cursor-pointer mt-2
                      outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1
                      transition-opacity hover:opacity-90"
               :style="{ backgroundColor: confirmColor }"
               @click="commitColor"
+              @focus="kbFocusIndex = 12"
             >{{ t('done') }}</button>
           </div>
         </div>
@@ -190,7 +193,7 @@ const UI = {
     transparent: '透明',
     opaque: '不透明',
     alphaValue: ({ pct, desc }) => `${desc}，透明度 ${pct}%`,
-    colorBtn: (desc) => `当前颜色：${desc}`,
+    colorBtn: ({ desc }) => `当前颜色：${desc}`,
     done: '完成',
   },
   en: {
@@ -200,7 +203,7 @@ const UI = {
     transparent: 'Transparent',
     opaque: 'Opaque',
     alphaValue: ({ pct, desc }) => `${desc}, ${pct}% opacity`,
-    colorBtn: (desc) => `Current color: ${desc}`,
+    colorBtn: ({ desc }) => `Current color: ${desc}`,
     done: 'Done',
   },
 }
@@ -342,34 +345,56 @@ function pickAlpha(a) {
   refreshKeyboardPreview()
 }
 
-function onRadioKeydown(e, group, idx) {
-  const items = group === 'hue' ? hueOptions.value : alphaOptions
-  const len = items.length
+const kbFocusIndex = ref(0)
+
+const ROW_RANGES = [
+  { start: 0,  end: 7 },   // hue: 0-7
+  { start: 8,  end: 11 },  // alpha: 8-11
+  { start: 12, end: 12 },  // confirm: 12
+]
+
+function onKbKeydown(e) {
+  const cur = kbFocusIndex.value
+  let row = ROW_RANGES.findIndex(r => cur >= r.start && cur <= r.end)
+  if (row < 0) return
+
+  let next = cur
 
   switch (e.key) {
-    case 'ArrowRight':
-      if (idx < len - 1) { e.preventDefault(); focusInGroup(group, idx + 1) }
-      return
-    case 'ArrowLeft':
-      if (idx > 0) { e.preventDefault(); focusInGroup(group, idx - 1) }
-      return
-    case 'ArrowDown':
-      e.preventDefault()
-      if (group === 'hue') focusInGroup('alpha', Math.min(idx, alphaOptions.length - 1))
-      return
-    case 'ArrowUp':
-      e.preventDefault()
-      if (group === 'alpha') focusInGroup('hue', Math.min(idx, hueOptions.value.length - 1))
+    case 'ArrowRight': {
+      const r = ROW_RANGES[row]
+      if (cur < r.end) next = cur + 1
+      break
+    }
+    case 'ArrowLeft': {
+      const r = ROW_RANGES[row]
+      if (cur > r.start) next = cur - 1
+      break
+    }
+    case 'ArrowDown': {
+      if (row < ROW_RANGES.length - 1) {
+        const nr = ROW_RANGES[row + 1]
+        next = Math.min(cur + (nr.start - ROW_RANGES[row].start), nr.end)
+      }
+      break
+    }
+    case 'ArrowUp': {
+      if (row > 0) {
+        const pr = ROW_RANGES[row - 1]
+        next = Math.min(cur - (ROW_RANGES[row].start - pr.start), pr.end)
+      }
+      break
+    }
+    default:
       return
   }
-}
 
-function focusInGroup(group, index) {
-  const groups = popupRef.value?.querySelectorAll('[role="radiogroup"]')
-  if (!groups) return
-  const gi = group === 'hue' ? 0 : 1
-  const btn = groups[gi]?.querySelectorAll('button')[index]
-  btn?.focus()
+  if (next !== cur) {
+    e.preventDefault()
+    kbFocusIndex.value = next
+    const btns = popupRef.value?.querySelectorAll('[role="group"] button, [role="group"] > button:last-of-type')
+    btns?.[next]?.focus()
+  }
 }
 
 function commitColor() {
@@ -459,11 +484,12 @@ watch(open, async (val) => {
     window.addEventListener('resize', updatePopupPosition)
     window.addEventListener('scroll', updatePopupPosition, true)
 
-    // 焦点管理：键盘模式 focus 已选的色相按钮
+    // 焦点管理：键盘模式 focus 第一个按钮
     if (modality.value === 'keyboard') {
+      kbFocusIndex.value = 0
       nextTick(() => {
-        const sel = popupRef.value?.querySelector('[role="radiogroup"] [tabindex="0"]')
-        sel?.focus()
+        const btn = popupRef.value?.querySelector('[role="group"] [tabindex="0"]')
+        btn?.focus()
       })
     }
   } else {
