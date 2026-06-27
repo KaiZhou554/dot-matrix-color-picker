@@ -25,12 +25,25 @@
         <div
           v-if="open"
           ref="popupRef"
-          class="shadow-lg fixed z-50 w-fit rounded-2xl
-                 border-3 border-gray-200 dark:border-gray-600 font-sans
+          class="shadow-lg fixed z-50 w-fit rounded-xl
+                 border border-gray-200 dark:border-gray-600 font-sans
                  transition-colors duration-150
                  bg-white dark:bg-gray-800"
           :style="popupStyle"
         >
+          <!-- 顶部颜色预览条 -->
+          <div
+            class="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-gray-200 dark:border-gray-600"
+          >
+            <div
+              class="w-5 h-5 rounded shrink-0 ring-1 ring-inset ring-black/10 dark:ring-white/20"
+              :style="{ backgroundColor: displayColor }"
+            />
+            <span
+              class="font-mono text-xs leading-none tracking-tighter text-gray-600 dark:text-gray-300 whitespace-nowrap select-none"
+            >{{ displayOklch }}</span>
+          </div>
+
           <div
             ref="gridRef"
             class="color-grid grid gap-2.5 touch-none"
@@ -126,12 +139,23 @@ let pointerY = 0
 let currentHoverColor = ''
 const popupStyle = ref({})
 
+function formatOklch(str) {
+  const m = str.match(/^oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\/\s*([\d.]+)\)$/)
+  if (!m) return str
+  const [, l, c, h, a] = m
+  return `oklch(${Number(l).toFixed(2)} ${Number(c).toFixed(2)} ${Number(h).toFixed(1)} / ${Number(a).toFixed(2)})`
+}
+
+const displayColor = ref(props.modelValue)
+const displayOklch = ref(formatOklch(props.modelValue))
+
 // 打开时注入 DOM 引用 + 定位，并持续跟踪触发器位置
 watch(open, async (val) => {
   if (val) {
     await nextTick()
     if (!gridRef.value) return
 
+    resetDisplay()
     dotCache.length = 0
     const dots = gridRef.value.children
     for (let i = 0; i < dots.length; i++) {
@@ -185,11 +209,11 @@ function render() {
 
   const { left, top, right, bottom } = grid.getBoundingClientRect()
 
-  // 指针划出网格：立刻重置，模拟 mouseleave 的即时反馈
+  // 指针滑出网格：立刻重置
   if (pointerX < left || pointerX > right || pointerY < top || pointerY > bottom) {
     for (const dot of dotCache) dot.el.style.transform = `scale(${GRID.baseScale})`
     currentHoverColor = ''
-    if (popupRef.value) popupRef.value.style.borderColor = ''
+    resetDisplay()
     return
   }
 
@@ -214,8 +238,11 @@ function render() {
   }
 
   currentHoverColor = nearest ?? ''
-  if (popupRef.value) {
-    popupRef.value.style.borderColor = nearest ?? ''
+  if (nearest) {
+    displayColor.value = nearest
+    displayOklch.value = formatOklch(nearest)
+  } else {
+    resetDisplay()
   }
 }
 
@@ -236,7 +263,12 @@ function handleLeave() {
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
   for (const dot of dotCache) dot.el.style.transform = `scale(${GRID.baseScale})`
   currentHoverColor = ''
-  if (popupRef.value) popupRef.value.style.borderColor = ''
+  resetDisplay()
+}
+
+function resetDisplay() {
+  displayColor.value = props.modelValue
+  displayOklch.value = formatOklch(props.modelValue)
 }
 
 function selectColor() {

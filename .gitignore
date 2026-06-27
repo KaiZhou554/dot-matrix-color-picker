@@ -16,6 +16,7 @@ coverage
 
 # Editor directories and files
 .deepseek
+.reasonix
 .vscode/*
 !.vscode/extensions.json
 .idea
