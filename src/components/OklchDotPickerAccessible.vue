@@ -1,6 +1,6 @@
 <template>
   <div class="oklch-picker relative inline-block">
-    <!-- 触发器：通过不同事件区分交互方式 -->
+    <!-- 触发器：通过 :focus-visible 判断交互方式 -->
     <button
       ref="triggerRef"
       class="w-10 h-10 rounded-lg border-3 border-gray-200 dark:border-gray-600 cursor-pointer
@@ -8,9 +8,7 @@
              focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
       :style="{ backgroundColor: modelValue }"
       :aria-label="triggerAriaLabel"
-      @pointerdown="onTriggerPointerDown"
-      @keydown.enter.prevent="openModal('keyboard')"
-      @keydown.space.prevent="openModal('keyboard')"
+      @click="onTriggerClick"
     />
 
     <!-- 弹出面板 -->
@@ -118,8 +116,8 @@
                 role="radio"
                 :tabindex="Math.abs(keyAlpha - a) < 0.02 ? 0 : -1"
                 :aria-checked="Math.abs(keyAlpha - a) < 0.02"
-                :aria-label="t('alphaValue', { pct: Math.round(a * 100) })"
-                class="flex-1 h-9 cursor-pointer outline-none
+                :aria-label="t('alphaValue', { pct: Math.round(a * 100), desc: alphaDesc(a) })"
+                class="flex-1 h-9 cursor-pointer outline-none overflow-hidden
                        focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-blue-400
                        border border-gray-300 dark:border-gray-600
                        transition-all relative"
@@ -128,7 +126,7 @@
                   i === alphaOptions.length - 1 ? 'rounded-r-lg' : '',
                   i > 0 ? '-ml-px' : '',
                 ]"
-                :style="{ backgroundColor: alphaColor(a) }"
+                :style="{ background: alphaBg(a), backgroundSize: '100% 100%, 8px 8px' }"
                 @click="pickAlpha(a)"
                 @keydown="onRadioKeydown($event, 'alpha', i)"
               >
@@ -191,7 +189,7 @@ const UI = {
     alpha: '透明度',
     transparent: '透明',
     opaque: '不透明',
-    alphaValue: ({ pct }) => `透明度 ${pct}%`,
+    alphaValue: ({ pct, desc }) => `${desc}，透明度 ${pct}%`,
     colorBtn: (desc) => `当前颜色：${desc}`,
     done: '完成',
   },
@@ -201,7 +199,7 @@ const UI = {
     alpha: 'Opacity',
     transparent: 'Transparent',
     opaque: 'Opaque',
-    alphaValue: ({ pct }) => `${pct}% opacity`,
+    alphaValue: ({ pct, desc }) => `${desc}, ${pct}% opacity`,
     colorBtn: (desc) => `Current color: ${desc}`,
     done: 'Done',
   },
@@ -236,9 +234,20 @@ function hueLabel(key) {
   return dict[key] || key
 }
 
-function alphaColor(a) {
-  const shade = Math.round((1 - a) * 150 + 105)
-  return `rgb(${shade} ${shade} ${shade})`
+const ALPHA_DESC = {
+  'zh-CN': ['高度透明', '半透明', '略透明', '不透明'],
+  en: ['highly transparent', 'semi-transparent', 'slightly transparent', 'opaque'],
+}
+
+function alphaDesc(a) {
+  const idx = a < 0.35 ? 0 : a < 0.6 ? 1 : a < 0.85 ? 2 : 3
+  const dict = ALPHA_DESC[props.locale] || ALPHA_DESC['zh-CN']
+  return dict[idx]
+}
+
+function alphaBg(a) {
+  const g = Math.round(120 * a + 80)
+  return `linear-gradient(rgba(${g},${g},${g},${a}), rgba(${g},${g},${g},${a})), repeating-conic-gradient(#d4d4d4 0% 25%, transparent 0% 50%)`
 }
 
 // ═══════════════════════════════════════════
@@ -372,9 +381,9 @@ function commitColor() {
 // ═══════════════════════════════════════════
 //  触发行为
 // ═══════════════════════════════════════════
-function onTriggerPointerDown(e) {
-  // pointerdown 来自鼠标或触摸，但不来自键盘
-  openModal('pointer')
+function onTriggerClick() {
+  const keyboard = triggerRef.value?.matches(':focus-visible') ?? false
+  openModal(keyboard ? 'keyboard' : 'pointer')
 }
 
 function openModal(m) {
