@@ -15,8 +15,26 @@
 
         <!-- 选择器 -->
         <div class="flex justify-center">
-          <OklchDotPickerLite v-model="color" />
+          <OklchDotPickerAccessible v-model="color" :locale="lang" />
         </div>
+
+        <!-- 语言切换 -->
+        <div class="flex justify-center gap-2">
+          <button
+            class="px-3 py-1 text-xs rounded-md transition-colors"
+            :class="lang === 'zh-CN' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'"
+            @click="lang = 'zh-CN'"
+          >中文</button>
+          <button
+            class="px-3 py-1 text-xs rounded-md transition-colors"
+            :class="lang === 'en' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'"
+            @click="lang = 'en'"
+          >English</button>
+        </div>
+
+        <p class="text-xs text-gray-400 dark:text-gray-500 text-center -mt-2">
+          鼠标点击 · Enter/Space 键盘操作
+        </p>
 
         <!-- 当前颜色信息 -->
         <div class="space-y-3">
@@ -69,9 +87,10 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import OklchDotPickerLite from './OklchDotPickerLite.vue'
+import OklchDotPickerAccessible from './OklchDotPickerAccessible.vue'
 
 const color = ref('oklch(0.65 0.22 180 / 0.55)')
+const lang = ref('zh-CN')
 
 const presets = [
   'oklch(0.65 0.22 0 / 0.55)',
